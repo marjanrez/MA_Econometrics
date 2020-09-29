@@ -1,2 +1,2 @@
 # MA_Econometrics
-Statistics and Introduction to Econometrics
+Homeworks of Statistics and Introduction to Econometrics
