@@ -1,0 +1,251 @@
+---
+title: "Whether a given credit card transaction will be fraudulent or not?"
+author: "Marjan Rezvani"
+date: "Fall 2020"
+output: html_document
+---
+#####course: Econ B2000, Statistics and Introduction to Econometrics
+
+## Abstract
+
+####One of the most important responsibilities that a bank or financial institution has is to protect the integrity of the institution by working hard to protect the financial assets that it holds. Bank fraud can be defined as an unethical and/or criminal act by an individual or organization to illegally attempt to possess or receive money from a bank or financial institution.It is anticipated that card frauds would amount to around $30 billion worldwide by 2020. So, how banks can improve security by detecting and obstructing frauds?
+####In this project, I have applied multiple ML techniques to the problem using card transaction data to identify fraudulent transactions (i.e. Fraud Detection)
+####I tried to show that my proposed approaches are able to detect fraud transactions with high accuracy and reasonably low number of false positives.
+
+## Introduction
+
+####Banking Fraud has been an ever-growing issue with huge consequences to banks and customers, in terms of financial losses, trust and credibility. An effective fraud detection system should be able to detect fraudulent transactions with high accuracy and efficiency.
+####A major challenge in applying a model to fraud detection is presence of highly imbalanced data sets. In many available datasets, majority of transactions are genuine with an extremely small percentage of fraudulent ones. Designing an accurate and efficient fraud detection system that is low on false positives but detects fraudulent activity effectively is a significant challenge. 
+####In this project, I have applied multiple binary classification approaches such as Logistic Regression, Random Forest and Support Vector Machine to solve this problem on a labeled dataset. my models collect information, analyze the data gathered and extract the required features. my goal is to build binary classifiers which are able to separate fraud transactions from non-fraud transactions. Then I compared the effectiveness of these approaches in detecting fraud transactions.
+
+## Related Work
+
+#### There are different types of approaches which have been applied to the problem of fraud detection which gave me some ideas to do my project. Different computational methods have been stated for detecting the fraud by computing various parameters for each kind of algorithm. and They had taken the different datasets german credit card dataset. 
+####For instance, in paper https://ijarcce.com/upload/2017/june-17/IJARCCE%202.pdf there have been used some of the supervised algorithms to detect the fraud which gives accurate results. first They have explained different types of frauds which are: credit card fraud, financial fraud, mortgage fraud, insurance fraud , telecommunication fraud. Then they used some supervised learning algorithms predictions which are made on the known training dataset. Their learning algorithms are further grouped into regression and classification problems. so they collected the accurate training dataset and then have found the accuracy of the function. It is the machine learning task of inferring a function from supervised training data. in continue, they created small decision trees so that records can be identified after only a few decision tree splitting. then tried to match a hoped for minimalism of the process of decision making.
+#### In the other paper, https://arxiv.org/pdf/1611.06439.pdf, some people investigated difficulties of credit card fraud detection. Then the advantages and disadvantages of fraud detection methods have been enumerated and compared.Furthermore, they have presented a classification of some techniques into two main fraud detection approaches, namely, misuses (supervised) and anomaly detection (unsupervised). 
+#### In addition, a group of students in their project  http://cs229.stanford.edu/proj2018/report/261.pdf have reviewed and compared such multiple state of the techniques, datasets and evaluation criteria applied to this problem. they have applied multiple binary classification approaches - Logistic regression, Linear SVM and SVM with RBF kernel on a labeled dataset. 
+
+## Dataset and Explanatory Analysis
+
+#### In this project I have used a dataset downloaded from capital one data science challenge repository https://github.com/CapitalOneRecruiting/DS which contains a year credit card transaction made in 2016. There are 641914 instances in the dataset. As it’s shown below: 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r dataset}
+raw_data <- read.csv(file='/Users/marjanrezvani/Documents/Fall2020/eco_stat/final_project/data/rawdata.csv')
+colnames(raw_data)[order(colnames(raw_data))]
+```
+
+#### This dataset is highly unbalance with a low percentage of fraudulent transactions within several records of non-fraud transactions, which is shown in my pie chart. Out of the 641914 transactions in the dataset, 10892 were fraudulent which means the True frauds account for 2% of all transactions. The feature named ‘isFraud’ is used to classify the transaction whether it is a fraud or not. There are also features besides being fraud and not fraud that I am going to describe. Some of numerical attributes are like available money, credit limit and categorical attributes like merchant name and transaction type. there are also few attributes such as echoBuffer, merchantCity, merchantState, merchantZip, posOnPremises, recurringAuthInd, which totally have missing values that I will not use these columns.
+
+```{r Pie chart}
+pie(table(raw_data$isFraud),
+    labels = paste(round(prop.table(table(raw_data$isFraud))*100), "%", sep = ""), 
+    col = heat.colors(2), main = "Fraud vs non-Fraud")
+
+legend("topright", legend = c("Not-Fraud", "Fraud"), 
+       fill = heat.colors(2), title = "Categories", cex = 0.75)
+
+```
+
+#### Classification results for the unbalanced data could be misleading. So, I first make a balanced dataset. There are various ways to make data balanced. such as downsample majority class or upsample minority class. In this part, I downsample majority class.
+
+```{r making balance dataset}
+dim(raw_data[raw_data$isFraud=='True',])[1] # Fraud 
+dim(raw_data[raw_data$isFraud=='False',])[1] # non Fraud
+
+df1 = raw_data[raw_data$isFraud=='True',]
+tmp = raw_data[raw_data$isFraud=='False',]
+df2 = tmp[sample(nrow(raw_data[raw_data$isFraud=='False',]),15000),]
+
+balanced_df = rbind(df1,df2)
+```
+
+#### then I created a new variable named 'correctCVV'. Its value is True if cardCVV matches enteredCVV
+
+```{r }
+balanced_df$correctCVV <- with(balanced_df, ifelse(cardCVV==enteredCVV, 'True', 'False'))
+
+summary(balanced_df)
+attach(balanced_df)
+
+pie(table(isFraud), labels = paste(round(prop.table(table(isFraud))*100), "%", sep = ""), 
+    col = heat.colors(2), main = "Fraud vs non-Fraud")
+
+legend("topright", legend = c("Not-Fraud", "Fraud"), 
+       fill = heat.colors(2), title = "Categories", cex = 0.75)
+```
+
+#### So now from the pie chart we observe that we have kind of balanced dataset.
+#### Let's do some plots to examine the dataset.
+#### First thing I am interested in is to explore and see if there is a difference between the distribution of transactionamount across Fraud or non-Fraud.
+#### Plot below shows that  Fradualant transavctions have higher transaction amount (e.g. compare the area under the curve for range of $500 to $1000 )
+
+```{r}
+library(ggplot2)
+ggplot(data=balanced_df, aes(x = transactionAmount, fill = isFraud)) +
+  geom_density(alpha = .3) #alpha used for filling the density
+
+```
+
+#### Let's see if how the transactions are distributed across different merchants.
+#### Plot below shows that majority of the transactions are from online_retail. fastfood, and food, and entertainment are the other 3 merchants with high number of transactions.
+
+```{r }
+(ggplot(balanced_df, aes(x=merchantCategoryCode, fill=merchantCategoryCode))
+  + geom_bar()
+  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+)
+```
+
+
+#### Another interesting feature is 'expirationDateKeyInMatch' which shows whether the entered expiration date matched the one on the card.
+#### Plot below shows that for fradulent transactions, majority of them expiration date does not match
+
+```{r }
+(ggplot(balanced_df[balanced_df$isFraud=='True',], aes(x=expirationDateKeyInMatch, fill=expirationDateKeyInMatch))
+  + geom_bar()
+  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+)
+```
+
+
+#### Similarly, we can look at cardPresent featute. It tells whether card was present during transaction or not. Plot below indicates that for Fradulent transactions, most of the transactioins card was not present (in other words most of them was online. Actually, we can confirm this by looking at distribution of Fradulent transactions across different merchants)
+
+
+```{r }
+(ggplot(balanced_df[balanced_df$isFraud=='True',], aes(x=cardPresent, fill=cardPresent))
+ + geom_bar()
+ + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+)
+
+```
+
+
+#### And Finally plot below shows that, we have most of the Fradulent transactions heppening in online_retails.
+
+
+```{r}
+(ggplot(balanced_df[balanced_df$isFraud=='True',], aes(x=merchantCategoryCode, fill=merchantCategoryCode))
+  + geom_bar()
+  + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+)
+```
+
+
+## Methods
+####my goal is to detect fraud and non-fraud transactions by building appropriate binary classifiers. I have built some models using logistic regression, Random Forest and Support Vector machine. then I compare the effectiveness of these approaches in detecting fraud transactions.
+####With these models, my goal is to (1) learn a model that, given the features, can predict which transactions have this label, (2) evaluate the model and estimate its generalizable accuracy metric, and (3) identify the features most important for prediction. 
+#### then to be able to test the performance of my algorithms, I split data into train test split by the ration of 0.25 and feed into model. Then I discuss results obtained in training, validation and testing phases. and evaluate performance of my models by computing accuracy metrics. 
+
+```{r }
+balanced_df$merchantCategoryCode <- as.factor(balanced_df$merchantCategoryCode)
+balanced_df$transactionType <- as.factor(balanced_df$transactionType)
+balanced_df$correctCVV <- as.factor(balanced_df$correctCVV)
+balanced_df$cardPresent <- as.factor(balanced_df$cardPresent)
+
+## 75% of the sample size
+smp_size <- floor(0.75 * nrow(balanced_df))
+
+## set the seed to make the partition reproducible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(balanced_df)), size = smp_size)
+
+train <- balanced_df[train_ind, ]
+test <- balanced_df[-train_ind, ]
+
+vartokeep <- c('isFraud','transactionAmount','merchantCategoryCode','transactionType',
+               'correctCVV', 'cardPresent', 'currentBalance', 'creditLimit')
+train <- train[,vartokeep]
+test <- test[,vartokeep]
+
+```
+
+### Logistic Regression
+
+#### I fit my logistic regression model to my data and get the following classification report and confusion matrix. The number of correct and incorrect predictions are summarized with count values and broken down by each class 'Fraud' and 'Not Fraud'.
+
+```{r logistic regression}
+model_logit <- glm(isFraud ~ transactionAmount + merchantCategoryCode + transactionType+
+                     correctCVV + cardPresent + currentBalance + creditLimit,
+                    family = binomial, data = train)
+
+summary(model_logit)
+
+logit.pred <- predict(model_logit, test)
+logit.pred_label <- (logit.pred > 0.5)
+
+logitpredtable <- table(pred = logit.pred_label, true = test$isFraud)
+logitpredtable
+accuracy.logit <- sum((prop.table(logitpredtable)[1,1])+(prop.table(logitpredtable)[2,2]))
+print(accuracy.logit)
+```
+
+####In my Logistic regression model, I observed 0.6199818 precision. as you can see in the summary, some attribute play an important role and are significant, such as transactionAmount, merchantCategoryCodeauto, merchantCategoryCodefastfood, merchantCategoryCodefood, merchantCategoryCodehotels, merchantCategoryCodesubscriptions, transactionTypeADDRESS_VERIFICATION, correctCVVTrue, and cardPresentTrue. 
+
+## Random Forest
+
+```{r randomForest}
+require('randomForest')
+set.seed(54321)
+model_randFor <- randomForest( as.factor(isFraud) ~ transactionAmount + merchantCategoryCode +
+                                 transactionType + correctCVV + 
+                                 cardPresent + currentBalance + creditLimit,
+                               data = train, importance=TRUE, proximity=TRUE)
+
+print(model_randFor)
+round(importance(model_randFor),2)
+varImpPlot(model_randFor)
+
+
+rf.pred <- predict(model_randFor, test)
+
+
+RFpredtable <- table(pred = rf.pred, true = test$isFraud)
+RFpredtable
+accuracy.rf <- sum((prop.table(RFpredtable)[1,1])+(prop.table(RFpredtable)[2,2]))
+print(accuracy.rf)
+
+```
+
+## SVM
+
+```{r svm}
+require(e1071)
+
+svm.model <- svm(as.factor(isFraud) ~ transactionAmount + merchantCategoryCode +
+                   transactionType + correctCVV + 
+                   cardPresent + currentBalance + creditLimit,
+                   data = train, cost = 10, gamma = 0.1, probability=TRUE)
+
+svm.pred <- predict(svm.model, test)
+SVMpredtable <- table(pred = svm.pred, true = test$isFraud)
+SVMpredtable
+SVMproppred <- prop.table(SVMpredtable)
+SVMproppred
+SVMgoodpred <- sum((SVMproppred[1,1])+(SVMproppred[2,2]))
+SVMgoodpred
+
+```
+
+### Logistic Regression is a linear classifier. If the decision boundary is non-linear othere methods would outperform. Random Forest is an ensemble method which is capable of handeling non-linear boundary. SVM can also be useful when we have non-linear boundary since by using kernel functions (such as RBF) we can handle this non-lineartity.
+### the results I obtained shows that SVM outperform logistic regression and Random Forest.
+
+
+
+
+
+
+
+
+
+
+
+### Bibliography  
+#####[ftp://ftp.cdc.gov/pub/Health_Statistics/NCHS/Dataset_Documentation/NHIS/2014/personsx_layout.pdf]
+#####(ftp://ftp.cdc.gov/pub/Health_Statistics/NCHS/Dataset_Documentation/NHIS/2014/personsx_layout.pdf)
+#####http://cs229.stanford.edu/proj2018/report/261.pdf
+#####paper https://ieeexplore.ieee.org/abstract/document/1297040  
+##### http://www.ecmlpkdd2018.org/wp-content/uploads/2018/09/567.pdf
